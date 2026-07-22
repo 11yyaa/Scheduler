@@ -1,0 +1,72 @@
+from __future__ import annotations
+
+from enum import Enum
+from typing import List, Union
+
+from Include.Scheduler.IFaces.i_runner import IRunner
+from Include.Scheduler.IFaces.i_scheduler import IScheduler
+from Include.Scheduler.IFaces.i_task import ITask
+
+from Src.scheduler_dag_critical import DagCriticalPathScheduler
+from Src.scheduler_dag_priority import DagUserPriorityScheduler
+from Src.scheduler_factory_helper import SchedulerFactoryHelper
+from Src.scheduler_parallel import ParallelFIFODepScheduler
+from Src.scheduler_sequential import SequentialDepsScheduler
+
+
+class SchedulerKind(str, Enum):
+    SEQUENTIAL = "sequential"
+    PARALLEL = "parallel"
+    DAG_PRIORITY = "dag_priority"
+    DAG_CRITICAL = "dag_critical"
+
+
+# фабрика планировщиков, по аналогии с фабрикой раннеров
+class SchedulerFactory:
+    @staticmethod
+    def create_scheduler(
+        kind: Union[SchedulerKind, str],
+        tasks: List[ITask],
+        runners: List[IRunner],
+    ) -> IScheduler:
+        if isinstance(kind, str):
+            kind = SchedulerKind(kind)
+
+        # проверка наличия исполнителей
+        if not runners:
+            raise ValueError("Runner list must not be empty")
+
+        # выбор типа планировщика
+        if kind == SchedulerKind.SEQUENTIAL:
+            scheduler = SequentialDepsScheduler()
+            return SchedulerFactoryHelper.bind_scheduler_data(
+                scheduler=scheduler,
+                tasks=tasks,
+                runners=[runners[0]],
+            )
+
+        if kind == SchedulerKind.PARALLEL:
+            scheduler = ParallelFIFODepScheduler()
+            return SchedulerFactoryHelper.bind_scheduler_data(
+                scheduler=scheduler,
+                tasks=tasks,
+                runners=runners,
+            )
+
+        if kind == SchedulerKind.DAG_PRIORITY:
+            scheduler = DagUserPriorityScheduler()
+            return SchedulerFactoryHelper.bind_scheduler_data(
+                scheduler=scheduler,
+                tasks=tasks,
+                runners=runners,
+            )
+
+        if kind == SchedulerKind.DAG_CRITICAL:
+            scheduler = DagCriticalPathScheduler()
+            return SchedulerFactoryHelper.bind_scheduler_data(
+                scheduler=scheduler,
+                tasks=tasks,
+                runners=runners,
+            )
+
+        raise ValueError(f"Unsupported scheduler kind: {kind}")
